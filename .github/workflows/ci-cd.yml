@@ -27,7 +27,9 @@ jobs:
           fetch-depth: 0
 
       - name: Scan Repository for Secrets
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   # Stage 2: Maven Build, Tests and SonarQube Analysis
   build-and-push:
@@ -51,6 +53,7 @@ jobs:
       - name: Build and Run Tests
         run: mvn clean verify
 
+      # Stage 3: SonarQube Code Analysis
       - name: SonarQube Code Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
@@ -61,19 +64,27 @@ jobs:
           -Dsonar.organization=jyoshithareddy08
           -Dsonar.host.url=https://sonarcloud.io
 
+      # Stage 4: Docker Image Build and Publishing
       - name: Login to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          echo "$DOCKERHUB_TOKEN" | docker login \
+            --username "$DOCKERHUB_USERNAME" \
+            --password-stdin
 
-      - name: Build and Push Docker Image
+      - name: Build Docker Image
         if: github.event_name != 'pull_request'
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            jyoshitha8/cloud-cicd-pipeline:latest
-            jyoshitha8/cloud-cicd-pipeline:${{ github.sha }}
+        run: |
+          docker build \
+            -t jyoshitha8/cloud-cicd-pipeline:latest \
+            -t jyoshitha8/cloud-cicd-pipeline:${{ github.sha }} \
+            .
+
+      - name: Push Docker Image
+        if: github.event_name != 'pull_request'
+        run: |
+          docker push jyoshitha8/cloud-cicd-pipeline:latest
+          docker push jyoshitha8/cloud-cicd-pipeline:${{ github.sha }}
